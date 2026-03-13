@@ -64,30 +64,4 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-// 获取当前用户的历史得分记录
-router.get('/scores/my', authenticateToken, async (req, res) => {
-  try {
-    const user_id = req.user.id;
-
-    // 查询当前用户的所有对局记录，按时间降序排序
-    const userScores = await MatchHistory.findAll({
-      where: { user_id },
-      order: [['created_at', 'DESC']]
-    });
-
-    // 格式化响应数据
-    const formattedScores = userScores.map(item => ({
-      id: item.id,
-      score: item.score,
-      survival_time: item.survival_time,
-      created_at: item.created_at
-    }));
-
-    res.status(200).json({ scores: formattedScores });
-  } catch (error) {
-    console.error('Get user scores error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
 module.exports = router;

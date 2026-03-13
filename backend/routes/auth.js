@@ -8,11 +8,6 @@ router.post('/register', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    // 验证密码长度
-    if (!password || password.length < 4) {
-      return res.status(400).json({ message: 'Password must be at least 4 characters long' });
-    }
-    
     // 检查用户名是否已存在
     const existingUser = await User.findOne({ where: { username } });
     if (existingUser) {
