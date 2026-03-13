@@ -117,6 +117,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import http from '../http'
 
 // 游戏历史数据
 const gameHistory = ref([])
@@ -161,33 +162,50 @@ const getScoreColor = (score) => {
   return '#ff6b6b'
 }
 
-// 从localStorage加载数据
-const loadHistory = () => {
+// 从后端API加载用户历史得分记录
+const loadHistory = async () => {
   try {
+    const token = localStorage.getItem('authToken')
+    if (token) {
+      const response = await http.get('/scores/my')
+      // 转换数据格式以适应前端展示
+      gameHistory.value = response.scores.map(item => ({
+        date: new Date(item.created_at).toLocaleString('zh-CN'),
+        score: item.score,
+        level: 1, // 默认为1级
+        time: item.survival_time
+      }))
+    } else {
+      // 未登录时使用localStorage数据
+      const savedHistory = localStorage.getItem('gameHistory')
+      if (savedHistory) {
+        gameHistory.value = JSON.parse(savedHistory)
+      } else {
+        // 添加一些模拟数据用于测试
+        gameHistory.value = [
+          { date: '2026-03-11 14:30', score: 120, level: 3, time: 35 },
+          { date: '2026-03-11 13:15', score: 85, level: 2, time: 25 },
+          { date: '2026-03-11 10:45', score: 150, level: 4, time: 45 },
+          { date: '2026-03-10 16:20', score: 60, level: 2, time: 18 },
+          { date: '2026-03-10 09:10', score: 95, level: 2, time: 30 }
+        ]
+      }
+    }
+  } catch (error) {
+    console.error('加载游戏历史失败:', error)
+    // 失败时使用localStorage数据
     const savedHistory = localStorage.getItem('gameHistory')
     if (savedHistory) {
       gameHistory.value = JSON.parse(savedHistory)
     } else {
-      // 添加一些模拟数据用于测试
-      gameHistory.value = [
-        { date: '2026-03-11 14:30', score: 120, level: 3, time: 35 },
-        { date: '2026-03-11 13:15', score: 85, level: 2, time: 25 },
-        { date: '2026-03-11 10:45', score: 150, level: 4, time: 45 },
-        { date: '2026-03-10 16:20', score: 60, level: 2, time: 18 },
-        { date: '2026-03-10 09:10', score: 95, level: 2, time: 30 }
-      ]
-      // 保存到localStorage
-      localStorage.setItem('gameHistory', JSON.stringify(gameHistory.value))
+      gameHistory.value = []
     }
-  } catch (error) {
-    console.error('加载游戏历史失败:', error)
-    gameHistory.value = []
   }
 }
 
 // 清除历史记录
 const clearHistory = () => {
-  if (confirm('确定要清除所有游戏历史记录吗？')) {
+  if (confirm('确定要清除本地游戏历史记录吗？')) {
     gameHistory.value = []
     localStorage.removeItem('gameHistory')
   }

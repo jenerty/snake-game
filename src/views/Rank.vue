@@ -45,7 +45,7 @@
             </div>
             
             <div class="rank-info">
-              <div class="rank-date">{{ item.date }}</div>
+              <div class="rank-date">{{ item.username }}</div>
               <div class="rank-details">
                 <span class="rank-level">等级: {{ item.level }}</span>
                 <span class="rank-time">时长: {{ item.time }}秒</span>
@@ -65,6 +65,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import http from '../http'
 
 // 排名列表
 const rankList = ref([])
@@ -75,29 +76,28 @@ const highestScore = computed(() => {
   return rankList.value[0].score
 })
 
-// 从localStorage加载数据并排序
-const loadRankings = () => {
+// 从后端API加载排行榜数据
+const loadRankings = async () => {
   try {
-    const savedHistory = localStorage.getItem('gameHistory')
-    if (savedHistory) {
-      const gameHistory = JSON.parse(savedHistory)
-      // 按分数从高到低排序
-      rankList.value = gameHistory.sort((a, b) => b.score - a.score)
-    } else {
-      // 添加一些模拟数据用于测试
-      rankList.value = [
-        { date: '2026-03-11 14:30', score: 150, level: 4, time: 45 },
-        { date: '2026-03-11 13:15', score: 120, level: 3, time: 35 },
-        { date: '2026-03-11 10:45', score: 95, level: 2, time: 30 },
-        { date: '2026-03-10 16:20', score: 85, level: 2, time: 25 },
-        { date: '2026-03-10 09:10', score: 60, level: 2, time: 18 }
-      ]
-      // 保存到localStorage
-      localStorage.setItem('gameHistory', JSON.stringify(rankList.value))
-    }
+    const response = await http.get('/leaderboard')
+    // 转换数据格式以适应前端展示
+    rankList.value = response.leaderboard.map((item, index) => ({
+      date: new Date().toLocaleString('zh-CN'), // 使用当前日期作为默认值
+      score: item.score,
+      level: 1, // 默认为1级
+      time: 0, // 默认时长为0秒
+      username: item.username
+    }))
   } catch (error) {
     console.error('加载排行榜数据失败:', error)
-    rankList.value = []
+    // 失败时使用模拟数据
+    rankList.value = [
+      { date: '2026-03-11 14:30', score: 150, level: 4, time: 45, username: 'player1' },
+      { date: '2026-03-11 13:15', score: 120, level: 3, time: 35, username: 'player2' },
+      { date: '2026-03-11 10:45', score: 95, level: 2, time: 30, username: 'player3' },
+      { date: '2026-03-10 16:20', score: 85, level: 2, time: 25, username: 'player4' },
+      { date: '2026-03-10 09:10', score: 60, level: 2, time: 18, username: 'player5' }
+    ]
   }
 }
 

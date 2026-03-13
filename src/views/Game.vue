@@ -53,6 +53,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
+import http from '../http'
 
 // 游戏配置
 const gridSize = 20
@@ -273,7 +274,7 @@ const checkCollision = () => {
 }
 
 // 结束游戏
-const endGame = () => {
+const endGame = async () => {
   clearInterval(gameInterval)
   gameOver.value = true
   gameStarted.value = false
@@ -283,12 +284,15 @@ const endGame = () => {
     highScore.value = score.value
   }
   
+  // 计算游戏时长（秒）
+  const survivalTime = Math.floor((Date.now() - gameStartTime) / 1000)
+  
   // 保存游戏记录到localStorage
   const gameRecord = {
     date: new Date().toLocaleString('zh-CN'),
     score: score.value,
     level: level.value,
-    time: Math.floor((Date.now() - gameStartTime) / 1000) // 计算游戏时长（秒）
+    time: survivalTime
   }
   
   try {
@@ -302,6 +306,20 @@ const endGame = () => {
     localStorage.setItem('gameHistory', JSON.stringify(gameHistory))
   } catch (error) {
     console.error('保存游戏记录失败:', error)
+  }
+  
+  // 检查是否已登录，如果登录则上报分数
+  const token = localStorage.getItem('authToken')
+  if (token) {
+    try {
+      await http.post('/scores', {
+        score: score.value,
+        survivalTime: survivalTime
+      })
+      console.log('分数上报成功')
+    } catch (error) {
+      console.error('分数上报失败:', error)
+    }
   }
 }
 
