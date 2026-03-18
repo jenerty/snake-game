@@ -109,6 +109,27 @@
             <div class="history-level">等级: {{ game.level }}</div>
             <div class="history-time">时间: {{ game.time }}秒</div>
           </div>
+          
+          <!-- 分页控件 -->
+          <div class="pagination">
+            <button 
+              class="pagination-button" 
+              @click="previousPage" 
+              :disabled="currentPage === 1"
+            >
+              上一页
+            </button>
+            <span class="pagination-info">
+              第 {{ currentPage }} 页，共 {{ totalPages }} 页
+            </span>
+            <button 
+              class="pagination-button" 
+              @click="nextPage" 
+              :disabled="currentPage === totalPages"
+            >
+              下一页
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -122,13 +143,19 @@ import http from '../http'
 // 游戏历史数据
 const gameHistory = ref([])
 
+// 分页相关状态
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalRecords = ref(0)
+const totalPages = computed(() => Math.ceil(totalRecords.value / pageSize.value))
+
 // 计算统计信息
-const totalGames = computed(() => gameHistory.value.length)
+const totalGames = computed(() => totalRecords.value)
 const highestScore = computed(() => Math.max(...gameHistory.value.map(game => game.score), 0))
 const highestLevel = computed(() => Math.max(...gameHistory.value.map(game => game.level), 0))
 const averageScore = computed(() => {
-  if (totalGames.value === 0) return 0
-  return Math.round(gameHistory.value.reduce((sum, game) => sum + game.score, 0) / totalGames.value)
+  if (gameHistory.value.length === 0) return 0
+  return Math.round(gameHistory.value.reduce((sum, game) => sum + game.score, 0) / gameHistory.value.length)
 })
 
 // 计算时间分布
@@ -163,11 +190,13 @@ const getScoreColor = (score) => {
 }
 
 // 从后端API加载用户历史得分记录
-const loadHistory = async () => {
+const loadHistory = async (page = 1) => {
   try {
     const token = localStorage.getItem('authToken')
     if (token) {
-      const response = await http.get('/scores/my')
+      const response = await http.get(`/scores/my?page=${page}&limit=${pageSize.value}`)
+      totalRecords.value = response.total
+      currentPage.value = response.page
       // 转换数据格式以适应前端展示
       gameHistory.value = response.scores.map(item => ({
         date: new Date(item.created_at).toLocaleString('zh-CN'),
@@ -179,16 +208,35 @@ const loadHistory = async () => {
       // 未登录时使用localStorage数据
       const savedHistory = localStorage.getItem('gameHistory')
       if (savedHistory) {
-        gameHistory.value = JSON.parse(savedHistory)
+        const allHistory = JSON.parse(savedHistory)
+        totalRecords.value = allHistory.length
+        currentPage.value = page
+        // 模拟分页
+        const start = (page - 1) * pageSize.value
+        const end = start + pageSize.value
+        gameHistory.value = allHistory.slice(start, end)
       } else {
         // 添加一些模拟数据用于测试
-        gameHistory.value = [
+        const mockData = [
           { date: '2026-03-11 14:30', score: 120, level: 3, time: 35 },
           { date: '2026-03-11 13:15', score: 85, level: 2, time: 25 },
           { date: '2026-03-11 10:45', score: 150, level: 4, time: 45 },
           { date: '2026-03-10 16:20', score: 60, level: 2, time: 18 },
-          { date: '2026-03-10 09:10', score: 95, level: 2, time: 30 }
+          { date: '2026-03-10 09:10', score: 95, level: 2, time: 30 },
+          { date: '2026-03-09 14:30', score: 110, level: 3, time: 32 },
+          { date: '2026-03-09 13:15', score: 75, level: 2, time: 22 },
+          { date: '2026-03-09 10:45', score: 140, level: 4, time: 42 },
+          { date: '2026-03-08 16:20', score: 50, level: 2, time: 15 },
+          { date: '2026-03-08 09:10', score: 85, level: 2, time: 28 },
+          { date: '2026-03-07 14:30', score: 100, level: 3, time: 30 },
+          { date: '2026-03-07 13:15', score: 65, level: 2, time: 20 }
         ]
+        totalRecords.value = mockData.length
+        currentPage.value = page
+        // 模拟分页
+        const start = (page - 1) * pageSize.value
+        const end = start + pageSize.value
+        gameHistory.value = mockData.slice(start, end)
       }
     }
   } catch (error) {
@@ -196,10 +244,31 @@ const loadHistory = async () => {
     // 失败时使用localStorage数据
     const savedHistory = localStorage.getItem('gameHistory')
     if (savedHistory) {
-      gameHistory.value = JSON.parse(savedHistory)
+      const allHistory = JSON.parse(savedHistory)
+      totalRecords.value = allHistory.length
+      currentPage.value = page
+      // 模拟分页
+      const start = (page - 1) * pageSize.value
+      const end = start + pageSize.value
+      gameHistory.value = allHistory.slice(start, end)
     } else {
       gameHistory.value = []
+      totalRecords.value = 0
     }
+  }
+}
+
+// 上一页
+const previousPage = () => {
+  if (currentPage.value > 1) {
+    loadHistory(currentPage.value - 1)
+  }
+}
+
+// 下一页
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    loadHistory(currentPage.value + 1)
   }
 }
 
@@ -207,6 +276,7 @@ const loadHistory = async () => {
 const clearHistory = () => {
   if (confirm('确定要清除本地游戏历史记录吗？')) {
     gameHistory.value = []
+    totalRecords.value = 0
     localStorage.removeItem('gameHistory')
   }
 }
@@ -545,11 +615,50 @@ onMounted(() => {
 }
 
 .history-time {
-  flex: 1;
-  color: #666;
-}
+    flex: 1;
+    color: #666;
+  }
 
-@media (max-width: 768px) {
+  /* 分页控件样式 */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin-top: 30px;
+  }
+
+  .pagination-button {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
+  }
+
+  .pagination-button:hover:not(:disabled) {
+    background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(76, 175, 80, 0.4);
+  }
+
+  .pagination-button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .pagination-info {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+  }
+
+  @media (max-width: 768px) {
   .profile-page {
     padding: 10px;
   }

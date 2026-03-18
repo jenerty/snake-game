@@ -1,6 +1,11 @@
 
 <template>
   <div class="app">
+    <!-- 新纪录横幅 -->
+    <div v-if="showNewRecordBanner" class="new-record-banner">
+      🔥 恭喜 {{ newRecordUsername }} 打破最高分：{{ newRecordScore }}！
+    </div>
+    
     <!-- 顶部导航栏 -->
     <nav class="navbar">
       <div class="navbar-container">
@@ -13,6 +18,7 @@
           <router-link to="/game" class="navbar-item" active-class="active">游戏</router-link>
           <router-link to="/profile" class="navbar-item" active-class="active">个人战绩</router-link>
           <router-link to="/rank" class="navbar-item" active-class="active">排行榜</router-link>
+          <router-link v-if="user?.role === 'admin'" to="/admin" class="navbar-item" active-class="active">管理后台</router-link>
           <template v-if="!isLoggedIn">
             <router-link to="/login" class="navbar-item" active-class="active">登录</router-link>
             <router-link to="/register" class="navbar-item" active-class="active">注册</router-link>
@@ -31,13 +37,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
 const isLoggedIn = ref(false)
 const user = ref(null)
+
+// 新纪录横幅状态
+const showNewRecordBanner = ref(false)
+const newRecordUsername = ref('')
+const newRecordScore = ref(0)
+let ws = null
 
 // 检查登录状态的方法
 const checkLoginStatus = () => {
@@ -53,8 +65,76 @@ const checkLoginStatus = () => {
   }
 }
 
+// 初始化WebSocket连接
+const initWebSocket = () => {
+  // 确保只创建一个WebSocket连接
+  if (ws) {
+    return
+  }
+  
+  // 建立WebSocket连接，携带token参数
+  const token = localStorage.getItem('authToken')
+  const wsUrl = window.location.protocol === 'https:' ? 'wss://localhost:3000' : 'ws://localhost:3000'
+  const connectUrl = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl
+  ws = new WebSocket(connectUrl)
+  
+  ws.onopen = () => {
+    console.log('WebSocket connection established')
+    // 已经通过URL参数携带token进行了认证，不需要再次发送认证消息
+  }
+  
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data)
+      
+      // 处理认证响应
+      if (message.type === 'AUTH_RESPONSE') {
+        if (message.success) {
+          console.log('WebSocket authentication successful')
+        } else {
+          console.error('WebSocket authentication failed:', message.message)
+          // 认证失败，关闭连接
+          ws.close()
+        }
+        return
+      }
+      
+      if (message.type === 'NEW_RECORD') {
+        // 显示新纪录横幅
+        newRecordUsername.value = message.username
+        newRecordScore.value = message.score
+        showNewRecordBanner.value = true
+        
+        // 5秒后自动隐藏横幅
+        setTimeout(() => {
+          showNewRecordBanner.value = false
+        }, 5000)
+      }
+    } catch (error) {
+      console.error('Error parsing WebSocket message:', error)
+    }
+  }
+  
+  ws.onclose = () => {
+    console.log('WebSocket connection closed')
+    // 尝试重新连接
+    setTimeout(initWebSocket, 3000)
+  }
+  
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error)
+  }
+}
+
 onMounted(() => {
   checkLoginStatus()
+  initWebSocket()
+})
+
+onUnmounted(() => {
+  if (ws) {
+    ws.close()
+  }
 })
 
 // 监听路由变化，每次路由变化时检查登录状态
@@ -193,6 +273,37 @@ const handleLogout = () => {
   .navbar-item {
     padding: 6px 12px;
     font-size: 0.9rem;
+  }
+  
+  .new-record-banner {
+    font-size: 0.9rem;
+    padding: 8px 16px;
+  }
+}
+
+/* 新纪录横幅样式 */
+.new-record-banner {
+  background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  text-align: center;
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 101;
+  animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 </style>

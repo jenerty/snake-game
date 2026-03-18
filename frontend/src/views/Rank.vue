@@ -37,7 +37,7 @@
           >
             <div class="rank-number">
               <span v-if="index < 3" class="medal">{{ getMedal(index) }}</span>
-              <span v-else>{{ index + 1 }}</span>
+              <span v-else>{{ (currentPage - 1) * pageSize + index + 1 }}</span>
             </div>
             
             <div class="rank-avatar">
@@ -53,10 +53,31 @@
             </div>
             
             <div class="rank-score">
-              <div class="score-value">{{ item.score }}</div>
+              <div class="score-value">{{ item.highestScore }}</div>
               <div class="score-label">分</div>
             </div>
           </div>
+        </div>
+
+        <!-- 分页控件 -->
+        <div v-if="totalPages > 1" class="pagination">
+          <button 
+            class="pagination-btn" 
+            :disabled="currentPage === 1"
+            @click="changePage(currentPage - 1)"
+          >
+            上一页
+          </button>
+          <div class="pagination-info">
+            第 {{ currentPage }} / {{ totalPages }} 页
+          </div>
+          <button 
+            class="pagination-btn" 
+            :disabled="currentPage === totalPages"
+            @click="changePage(currentPage + 1)"
+          >
+            下一页
+          </button>
         </div>
       </div>
     </div>
@@ -70,20 +91,38 @@ import http from '../http'
 // 排名列表
 const rankList = ref([])
 
+// 分页状态
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+
+// 计算总页数
+const totalPages = computed(() => {
+  return Math.ceil(total.value / pageSize.value)
+})
+
 // 计算最高分
 const highestScore = computed(() => {
   if (rankList.value.length === 0) return 0
-  return rankList.value[0].score
+  return rankList.value[0].highestScore
 })
 
 // 从后端API加载排行榜数据
 const loadRankings = async () => {
   try {
-    const response = await http.get('/leaderboard')
+    const response = await http.get('/leaderboard', {
+      params: {
+        page: currentPage.value,
+        limit: pageSize.value
+      }
+    })
+    
+    total.value = response.total
+    
     // 转换数据格式以适应前端展示
-    rankList.value = response.leaderboard.map((item, index) => ({
+    rankList.value = response.data.map((item, index) => ({
       date: new Date().toLocaleString('zh-CN'), // 使用当前日期作为默认值
-      score: item.score,
+      highestScore: item.highestScore,
       level: 1, // 默认为1级
       time: 0, // 默认时长为0秒
       username: item.username
@@ -92,13 +131,21 @@ const loadRankings = async () => {
     console.error('加载排行榜数据失败:', error)
     // 失败时使用模拟数据
     rankList.value = [
-      { date: '2026-03-11 14:30', score: 150, level: 4, time: 45, username: 'player1' },
-      { date: '2026-03-11 13:15', score: 120, level: 3, time: 35, username: 'player2' },
-      { date: '2026-03-11 10:45', score: 95, level: 2, time: 30, username: 'player3' },
-      { date: '2026-03-10 16:20', score: 85, level: 2, time: 25, username: 'player4' },
-      { date: '2026-03-10 09:10', score: 60, level: 2, time: 18, username: 'player5' }
+      { date: '2026-03-11 14:30', highestScore: 150, level: 4, time: 45, username: 'player1' },
+      { date: '2026-03-11 13:15', highestScore: 120, level: 3, time: 35, username: 'player2' },
+      { date: '2026-03-11 10:45', highestScore: 95, level: 2, time: 30, username: 'player3' },
+      { date: '2026-03-10 16:20', highestScore: 85, level: 2, time: 25, username: 'player4' },
+      { date: '2026-03-10 09:10', highestScore: 60, level: 2, time: 18, username: 'player5' }
     ]
+    total.value = 5
   }
+}
+
+// 切换页面
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  loadRankings()
 }
 
 // 获取奖牌图标
@@ -481,7 +528,67 @@ onMounted(() => {
   }
 }
 
+/* 分页控件样式 */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+}
+
+.pagination-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.2);
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(76, 175, 80, 0.3);
+}
+
+.pagination-btn:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.pagination-info {
+  font-size: 0.95rem;
+  color: #666;
+  font-weight: 500;
+  min-width: 120px;
+  text-align: center;
+}
+
 @media (max-width: 480px) {
+  .pagination {
+    flex-direction: column;
+    gap: 10px;
+    padding: 15px;
+  }
+  
+  .pagination-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+  
+  .pagination-info {
+    order: -1;
+  }
+  
   .rank-item {
     flex-wrap: wrap;
     gap: 10px;
